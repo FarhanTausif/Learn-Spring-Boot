@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <title>Student Details</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+<h2 th:text="'Details of ' + ${student.name}"></h2>
+<p>Email: <span th:text="${student.email}"></span></p>
+<p>Age: <span th:text="${student.age}"></span></p>
+<a href="/students">Back to List</a>
+</body>
+</html>
