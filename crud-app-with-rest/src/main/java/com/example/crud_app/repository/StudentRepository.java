@@ -2,36 +2,58 @@ package com.example.crud_app.repository;
 
 import com.example.crud_app.model.Student;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
+@Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
-    // Additional query methods can be defined here if needed
 
-    // 1. Get all students older than a certain age
+    // Derived query methods - Spring generates JPQL automatically!
 
-    @Query("SELECT s FROM Student s WHERE s.age > :age")
-    List<Student> findOlderThan(@Param("age") int age);
+    // Find students by age greater than specified value
+    List<Student> findByAgeGreaterThan(Integer age);
 
-    // 2. Count how many students have enrolled in at least one course
+    // Find students by age between range
+    List<Student> findByAgeBetween(Integer minAge, Integer maxAge);
 
-    @Query("SELECT COUNT(DISTINCT s) FROM Student s JOIN s.courses c")
-    //"SELECT COUNT(DISTINCT s) FROM Student s JOIN s.courses c" -- Explanation in details
-    // This JPQL query counts the number of unique students (DISTINCT s) who have at least one associated course.
-    // How? By performing an inner join (JOIN) between the Student entity (s) and its associated courses (c).
-    Long countStudentsWithCourses();
+    // Find students by email containing pattern (case-insensitive)
+    List<Student> findByEmailContainingIgnoreCase(String emailPattern);
 
-    // 3. Find students who enrolled in a course with a specific title
+    // Find student by exact email
+    Optional<Student> findByEmail(String email);
 
-    @Query("SELECT DISTINCT s FROM Student s JOIN s.courses c WHERE c.title = :title")
-    List<Student> findByCourseTitle(@Param("title") String title);
+    // Find students by name containing pattern (case-insensitive)
+    List<Student> findByNameContainingIgnoreCase(String namePattern);
 
-    // 4. Find average age of students enrolled per course title
+    // Find students by name or email containing pattern
+    List<Student> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String namePattern, String emailPattern);
 
-    @Query("SELECT c.title, AVG(s.age) FROM Student s JOIN s.courses c GROUP BY c.title")
-    List<Object[]> findAverageAgePerCourseTitle();
+    // Find students older than age, ordered by age descending
+    List<Student> findByAgeGreaterThanOrderByAgeDesc(Integer age);
 
+    // Find students by age, ordered by name
+    List<Student> findByAgeOrderByNameAsc(Integer age);
 
+    // Count students by age
+    Long countByAge(Integer age);
+
+    // Count students older than specified age
+    Long countByAgeGreaterThan(Integer age);
+
+    // Check if student exists by email
+    boolean existsByEmail(String email);
+
+    // Find students by name starting with prefix
+    List<Student> findByNameStartingWithIgnoreCase(String namePrefix);
+
+    // Find top N students ordered by age descending
+    List<Student> findTop5ByOrderByAgeDesc();
+
+    // Find students by age less than
+    List<Student> findByAgeLessThan(Integer age);
+
+    // Find students by name and age
+    Optional<Student> findByNameAndAge(String name, Integer age);
 }

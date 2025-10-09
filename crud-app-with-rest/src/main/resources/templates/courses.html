@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle} + ' - Student Management System'">Courses Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/style.css}">
+    <!-- Select2 for enhanced dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        .course-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+            cursor: pointer;
+        }
+        .course-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .course-card.assigned {
+            border-left-color: #28a745;
+        }
+        .course-card.unassigned {
+            border-left-color: #ffc107;
+        }
+        .credits-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 0.9rem;
+        }
+        .student-assignment {
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .filter-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+    </style>
+</head>
+<body>
+    <!-- Server Data for JavaScript -->
+    <script th:inline="javascript">
+        // Pass Thymeleaf data to JavaScript
+        window.courseData = {
+            totalCourses: [[${totalCourses ?: 0}]],
+            assignedCourses: [[${assignedCourses ?: 0}]],
+            unassignedCourses: [[${unassignedCourses ?: 0}]],
+            averageCredits: [[${averageCredits ?: 0}]],
+            creditDistribution: [[${creditDistribution}]],
+            contextPath: /*[[@{/}]]*/ '/',
+
+            // URL generation with Thymeleaf
+            urls: {
+                courses: /*[[@{/api/courses}]]*/ '/api/courses',
+                students: /*[[@{/api/students}]]*/ '/api/students',
+                assign: /*[[@{/api/courses/assign}]]*/ '/api/courses/assign',
+                unassign: /*[[@{/api/courses/unassign}]]*/ '/api/courses/unassign'
+            },
+
+            // Configuration
+            config: {
+                refreshInterval: 10000,
+                animationSpeed: 300,
+                pageSize: 12
+            }
+        };
+
+        // User permissions from server
+        window.userPermissions = {
+            canAdd: [[${true}]], // You can set this from your security context
+            canEdit: [[${true}]],
+            canDelete: [[${true}]],
+            canAssign: [[${true}]]
+        };
+    </script>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-graduation-cap"></i> Student Management System</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                    <a class="nav-link" href="/students"><i class="fas fa-users"></i> Students</a>
+                    <a class="nav-link active" href="/courses"><i class="fas fa-book"></i> Courses</a>
+                    <a class="nav-link" href="/jpql-demo"><i class="fas fa-code"></i> JPQL Demo</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Page Header with Dynamic Updates -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h1 class="display-5">
+                    <i class="fas fa-book text-primary"></i>
+                    Courses Management
+                    <small class="text-muted fs-6" id="courses-subtitle">
+                        Managing [[${totalCourses ?: 0}]] courses
+                    </small>
+                </h1>
+                <p class="lead">Advanced course management with real-time assignment tracking</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-primary" onclick="showAddCourseModal()"
+                            th:if="${userPermissions?.canAdd != false}">
+                        <i class="fas fa-plus"></i> Add Course
+                    </button>
+                    <button class="btn btn-success" onclick="showBulkAssignModal()"
+                            th:if="${userPermissions?.canAssign != false}">
+                        <i class="fas fa-tasks"></i> Bulk Assign
+                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-secondary dropdown-toggle"
+                                data-bs-toggle="dropdown">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="exportCourses('csv')">
+                                <i class="fas fa-file-csv"></i> CSV</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportCourses('excel')">
+                                <i class="fas fa-file-excel"></i> Excel</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportCourses('pdf')">
+                                <i class="fas fa-file-pdf"></i> PDF</a></li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-outline-primary" onclick="refreshCourses()">
+                        <i class="fas fa-sync-alt" id="refresh-icon"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Statistics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-white stats-card h-100" onclick="filterBy('all')">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6><i class="fas fa-book-open"></i> Total Courses</h6>
+                                <h2 id="total-courses-count" class="counter"
+                                    data-target="[[${totalCourses ?: 0}]]">0</h2>
+                                <small>All courses in system</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-books fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-success h-100" onclick="filterBy('assigned')">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6><i class="fas fa-user-check"></i> Assigned</h6>
+                                <h2 id="assigned-courses-count" class="counter"
+                                    data-target="[[${assignedCourses ?: 0}]]">0</h2>
+                                <small>
+                                    <span id="assignment-percentage">
+                                        [[${totalCourses > 0 ? #numbers.formatPercent((assignedCourses ?: 0) / totalCourses, 0, 0) : '0%'}]]
+                                    </span> assignment rate
+                                </small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-link fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning h-100" onclick="filterBy('unassigned')">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6><i class="fas fa-unlink"></i> Available</h6>
+                                <h2 id="unassigned-courses-count" class="counter"
+                                    data-target="[[${unassignedCourses ?: 0}]]">0</h2>
+                                <small>Ready for assignment</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-inbox fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6><i class="fas fa-calculator"></i> Avg Credits</h6>
+                                <h2 id="average-credits" th:text="${averageCredits ?: '0.0'}">0.0</h2>
+                                <small>Credits per course</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Filters -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card filter-card">
+                    <div class="card-header">
+                        <h5 class="mb-0 text-white">
+                            <i class="fas fa-filter"></i> Advanced Filters & Search
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Search Box with Live Search -->
+                            <div class="col-md-4">
+                                <label class="form-label text-white">Search Courses</label>
+                                <div class="input-group">
+                                    <input type="text" id="searchInput" class="form-control"
+                                           placeholder="Search by title..."
+                                           onkeyup="performLiveSearch()">
+                                    <button class="btn btn-light" onclick="clearSearch()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Credit Filter -->
+                            <div class="col-md-2">
+                                <label class="form-label text-white">Credits</label>
+                                <select id="creditsFilter" class="form-select" onchange="applyFilters()">
+                                    <option value="">All Credits</option>
+                                    <option th:each="creditGroup : ${creditDistribution?.keySet()}"
+                                            th:value="${creditGroup}" th:text="${creditGroup}">Credit Range</option>
+                                </select>
+                            </div>
+
+                            <!-- Assignment Status Filter -->
+                            <div class="col-md-2">
+                                <label class="form-label text-white">Status</label>
+                                <select id="statusFilter" class="form-select" onchange="applyFilters()">
+                                    <option value="">All Courses</option>
+                                    <option value="assigned">Assigned</option>
+                                    <option value="unassigned">Available</option>
+                                </select>
+                            </div>
+
+                            <!-- Sort Options -->
+                            <div class="col-md-2">
+                                <label class="form-label text-white">Sort By</label>
+                                <select id="sortBy" class="form-select" onchange="applySorting()">
+                                    <option value="title">Title A-Z</option>
+                                    <option value="title-desc">Title Z-A</option>
+                                    <option value="credits">Credits Low-High</option>
+                                    <option value="credits-desc">Credits High-Low</option>
+                                    <option value="recent">Recently Added</option>
+                                </select>
+                            </div>
+
+                            <!-- View Toggle -->
+                            <div class="col-md-2">
+                                <label class="form-label text-white">View</label>
+                                <div class="btn-group w-100" role="group">
+                                    <button type="button" class="btn btn-light active"
+                                            onclick="setViewMode('grid')" id="gridViewBtn">
+                                        <i class="fas fa-th"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-light"
+                                            onclick="setViewMode('list')" id="listViewBtn">
+                                        <i class="fas fa-list"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-light"
+                                            onclick="setViewMode('table')" id="tableViewBtn">
+                                        <i class="fas fa-table"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Filter Buttons -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-sm btn-outline-light"
+                                            onclick="quickFilter('high-credits')">
+                                        <i class="fas fa-star"></i> High Credits (4+)
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light"
+                                            onclick="quickFilter('unassigned')">
+                                        <i class="fas fa-exclamation-circle"></i> Need Assignment
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light"
+                                            onclick="quickFilter('popular')">
+                                        <i class="fas fa-fire"></i> Popular Courses
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light"
+                                            onclick="resetFilters()">
+                                        <i class="fas fa-undo"></i> Reset All
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Content Display Area -->
+        <div id="courses-container">
+            <!-- Loading State -->
+            <div id="loading-state" class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="text-muted">Loading courses...</p>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="text-center py-5 d-none">
+                <i class="fas fa-book-open fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No Courses Found</h4>
+                <p class="text-muted">Try adjusting your filters or add a new course.</p>
+                <button class="btn btn-primary" onclick="showAddCourseModal()">
+                    <i class="fas fa-plus"></i> Add Your First Course
+                </button>
+            </div>
+
+            <!-- Courses Grid (populated by JavaScript) -->
+            <div id="courses-grid" class="row d-none"></div>
+
+            <!-- Courses List (populated by JavaScript) -->
+            <div id="courses-list" class="d-none"></div>
+
+            <!-- Courses Table (populated by JavaScript) -->
+            <div id="courses-table" class="d-none"></div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <nav aria-label="Courses pagination">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <!-- Pagination buttons populated by JavaScript -->
+                    </ul>
+                </nav>
+                <div class="text-center text-muted">
+                    Showing <span id="showing-range">0-0</span> of <span id="total-results">0</span> courses
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Course Modal -->
+    <div class="modal fade" id="addCourseModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus"></i> Add New Course
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="addCourseForm" onsubmit="addCourse(event)">
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="courseTitle" class="form-label">Course Title *</label>
+                                    <input type="text" class="form-control" id="courseTitle"
+                                           required maxlength="100"
+                                           placeholder="e.g., Introduction to Computer Science">
+                                    <div class="form-text">Enter a descriptive course title</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="courseCredits" class="form-label">Credits *</label>
+                                    <input type="number" class="form-control" id="courseCredits"
+                                           required min="1" max="10" value="3">
+                                    <div class="form-text">1-10 credits</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="courseDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="courseDescription"
+                                      rows="3" maxlength="500"
+                                      placeholder="Brief course description..."></textarea>
+                            <div class="form-text">Optional course description (max 500 characters)</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="assignToStudent" class="form-label">Assign to Student (Optional)</label>
+                                    <select class="form-select" id="assignToStudent">
+                                        <option value="">Select a student...</option>
+                                        <!-- Populated by JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Course Category</label>
+                                    <select class="form-select" id="courseCategory">
+                                        <option value="general">General</option>
+                                        <option value="computer-science">Computer Science</option>
+                                        <option value="mathematics">Mathematics</option>
+                                        <option value="engineering">Engineering</option>
+                                        <option value="business">Business</option>
+                                        <option value="arts">Arts & Humanities</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Add Course
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Course Modal -->
+    <div class="modal fade" id="editCourseModal" tabindex="-1">
+        <!-- Similar structure to add modal but for editing -->
+    </div>
+
+    <!-- Bulk Assignment Modal -->
+    <div class="modal fade" id="bulkAssignModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-tasks"></i> Bulk Course Assignment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Available Courses</h6>
+                            <div id="available-courses-list" class="border rounded p-3" style="height: 300px; overflow-y: auto;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Select Student</h6>
+                            <select class="form-select mb-3" id="bulk-assign-student">
+                                <option value="">Choose student...</option>
+                                <!-- Populated by JavaScript -->
+                            </select>
+
+                            <h6>Selected Courses</h6>
+                            <div id="selected-courses-list" class="border rounded p-3" style="height: 200px; overflow-y: auto;">
+                                <p class="text-muted text-center">No courses selected</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="processBulkAssignment()">
+                        <i class="fas fa-check"></i> Assign Selected Courses
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <!-- Success Toast -->
+        <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="successMessage">Operation completed successfully!</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <span id="errorMessage">An error occurred!</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay d-none">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+            <h5>Processing...</h5>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <!-- Main Application JavaScript with Thymeleaf Integration -->
+    <script th:inline="javascript">
+        // Course Management Application
+        class CourseManager {
+            constructor() {
+                this.courses = [];
+                this.students = [];
+                this.filteredCourses = [];
+                this.currentPage = 1;
+                this.pageSize = window.courseData.config.pageSize;
+                this.currentView = 'grid';
+                this.currentSort = 'title';
+                this.filters = {
+                    search: '',
+                    credits: '',
+                    status: '',
+                    category: ''
+                };
+
+                this.init();
+            }
+
+            async init() {
+                try {
+                    // Initialize components
+                    this.setupEventListeners();
+                    this.initializeCounters();
+                    this.loadStudentsForDropdowns();
+
+                    // Load initial data
+                    await this.loadCourses();
+                    this.renderCourses();
+
+                    // Setup auto-refresh
+                    this.setupAutoRefresh();
+
+                    console.log('Course Manager initialized with data:', window.courseData);
+                } catch (error) {
+                    console.error('Failed to initialize Course Manager:', error);
+                    this.showError('Failed to initialize application');
+                }
+            }
+
+            setupEventListeners() {
+                // Search input with debouncing
+                let searchTimeout;
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        this.filters.search = e.target.value;
+                        this.applyFilters();
+                    }, 300);
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey) {
+                        switch(e.key) {
+                            case 'n': // Ctrl+N for new course
+                                e.preventDefault();
+                                this.showAddCourseModal();
+                                break;
+                            case 'f': // Ctrl+F for search
+                                e.preventDefault();
+                                document.getElementById('searchInput').focus();
+                                break;
+                            case 'r': // Ctrl+R for refresh
+                                e.preventDefault();
+                                this.refreshCourses();
+                                break;
+                        }
+                    }
+                });
+            }
+
+            initializeCounters() {
+                // Animate counters on page load
+                const counters = document.querySelectorAll('.counter');
+                counters.forEach(counter => {
+                    const target = parseInt(counter.getAttribute('data-target'));
+                    this.animateCounter(counter, 0, target, 1000);
+                });
+            }
+
+            animateCounter(element, start, end, duration) {
+                const range = end - start;
+                const increment = range / (duration / 16);
+                let current = start;
+
+                const timer = setInterval(() => {
+                    current += increment;
+                    if (current >= end) {
+                        current = end;
+                        clearInterval(timer);
+                    }
+                    element.textContent = Math.floor(current);
+                }, 16);
+            }
+
+            async loadCourses() {
+                try {
+                    const response = await fetch(window.courseData.urls.courses);
+                    this.courses = await response.json();
+                    this.filteredCourses = [...this.courses];
+                    this.updateStatistics();
+                } catch (error) {
+                    console.error('Error loading courses:', error);
+                    this.showError('Failed to load courses');
+                }
+            }
+
+            async loadStudentsForDropdowns() {
+                try {
+                    const response = await fetch(window.courseData.urls.students);
+                    this.students = await response.json();
+
+                    // Populate student dropdowns
+                    this.populateStudentDropdown('assignToStudent');
+                    this.populateStudentDropdown('bulk-assign-student');
+
+                } catch (error) {
+                    console.error('Error loading students:', error);
+                }
+            }
+
+            populateStudentDropdown(selectId) {
+                const select = document.getElementById(selectId);
+                if (!select) return;
+
+                // Clear existing options (except first)
+                select.innerHTML = '<option value="">Select a student...</option>';
+
+                this.students.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.studentId;
+                    option.textContent = `${student.name} (${student.email})`;
+                    select.appendChild(option);
+                });
+
+                // Initialize Select2 if available
+                if (typeof $ !== 'undefined' && $.fn.select2) {
+                    $(select).select2({
+                        placeholder: 'Search for a student...',
+                        allowClear: true,
+                        width: '100%'
+                    });
+                }
+            }
+
+            updateStatistics() {
+                const assigned = this.courses.filter(c => c.studentId).length;
+                const unassigned = this.courses.length - assigned;
+                const avgCredits = this.courses.length > 0 ?
+                    (this.courses.reduce((sum, c) => sum + c.credits, 0) / this.courses.length).toFixed(1) : 0;
+
+                // Update counters with animation
+                this.updateCounterWithAnimation('total-courses-count', this.courses.length);
+                this.updateCounterWithAnimation('assigned-courses-count', assigned);
+                this.updateCounterWithAnimation('unassigned-courses-count', unassigned);
+
+                document.getElementById('average-credits').textContent = avgCredits;
+
+                // Update percentage
+                const percentage = this.courses.length > 0 ?
+                    Math.round((assigned / this.courses.length) * 100) : 0;
+                document.getElementById('assignment-percentage').textContent = percentage + '%';
+
+                // Update subtitle
+                document.getElementById('courses-subtitle').textContent =
+                    `Managing ${this.courses.length} courses`;
+            }
+
+            updateCounterWithAnimation(elementId, newValue) {
+                const element = document.getElementById(elementId);
+                if (!element) return;
+
+                const currentValue = parseInt(element.textContent) || 0;
+                if (currentValue !== newValue) {
+                    this.animateCounter(element, currentValue, newValue, 500);
+                }
+            }
+
+            renderCourses() {
+                const container = document.getElementById('courses-container');
+                const loadingState = document.getElementById('loading-state');
+                const emptyState = document.getElementById('empty-state');
+
+                // Hide loading state
+                loadingState.classList.add('d-none');
+
+                if (this.filteredCourses.length === 0) {
+                    emptyState.classList.remove('d-none');
+                    this.hideAllViews();
+                    return;
+                }
+
+                emptyState.classList.add('d-none');
+
+                // Render based on current view mode
+                switch(this.currentView) {
+                    case 'grid':
+                        this.renderGridView();
+                        break;
+                    case 'list':
+                        this.renderListView();
+                        break;
+                    case 'table':
+                        this.renderTableView();
+                        break;
+                }
+
+                this.renderPagination();
+            }
+
+            renderGridView() {
+                this.hideAllViews();
+                const grid = document.getElementById('courses-grid');
+                grid.classList.remove('d-none');
+
+                const startIndex = (this.currentPage - 1) * this.pageSize;
+                const endIndex = Math.min(startIndex + this.pageSize, this.filteredCourses.length);
+                const coursesToShow = this.filteredCourses.slice(startIndex, endIndex);
+
+                grid.innerHTML = coursesToShow.map(course => this.createCourseCard(course)).join('');
+            }
+
+            createCourseCard(course) {
+                const isAssigned = course.studentId !== null;
+                const assignedStudent = isAssigned ?
+                    this.students.find(s => s.studentId === course.studentId) : null;
+
+                return `
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card course-card ${isAssigned ? 'assigned' : 'unassigned'} h-100"
+                             onclick="viewCourseDetails(${course.courseId})">
+                            <div class="card-body position-relative">
+                                <span class="badge bg-primary credits-badge">
+                                    ${course.credits} ${course.credits === 1 ? 'Credit' : 'Credits'}
+                                </span>
+
+                                <h5 class="card-title mt-2">
+                                    <i class="fas fa-book text-primary"></i>
+                                    ${this.escapeHtml(course.title)}
+                                </h5>
+
+                                ${course.description ?
+                                    `<p class="card-text text-muted small">${this.escapeHtml(course.description.substring(0, 100))}${course.description.length > 100 ? '...' : ''}</p>`
+                                    : ''}
+
+                                ${isAssigned ? `
+                                    <div class="student-assignment mt-3">
+                                        <small class="text-success fw-bold">
+                                            <i class="fas fa-user-check"></i> Assigned to:
+                                        </small><br>
+                                        <strong>${assignedStudent ? this.escapeHtml(assignedStudent.name) : 'Unknown Student'}</strong>
+                                        <br><small class="text-muted">${assignedStudent ? this.escapeHtml(assignedStudent.email) : ''}</small>
+                                    </div>
+                                ` : `
+                                    <div class="mt-3">
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-clock"></i> Available for Assignment
+                                        </span>
+                                    </div>
+                                `}
+
+                                <div class="d-flex gap-2 mt-3">
+                                    ${!isAssigned ? `
+                                        <button class="btn btn-sm btn-success"
+                                                onclick="event.stopPropagation(); showAssignModal(${course.courseId})"
+                                                title="Assign to student">
+                                            <i class="fas fa-user-plus"></i>
+                                        </button>
+                                    ` : `
+                                        <button class="btn btn-sm btn-warning"
+                                                onclick="event.stopPropagation(); unassignCourse(${course.courseId})"
+                                                title="Unassign course">
+                                            <i class="fas fa-unlink"></i>
+                                        </button>
+                                    `}
+
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            onclick="event.stopPropagation(); editCourse(${course.courseId})"
+                                            title="Edit course">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            onclick="event.stopPropagation(); confirmDeleteCourse(${course.courseId}, '${this.escapeHtml(course.title)}')"
+                                            title="Delete course">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            hideAllViews() {
+                document.getElementById('courses-grid').classList.add('d-none');
+                document.getElementById('courses-list').classList.add('d-none');
+                document.getElementById('courses-table').classList.add('d-none');
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Filter and search methods
+            applyFilters() {
+                this.filteredCourses = this.courses.filter(course => {
+                    // Search filter
+                    if (this.filters.search) {
+                        const searchTerm = this.filters.search.toLowerCase();
+                        if (!course.title.toLowerCase().includes(searchTerm) &&
+                            !(course.description && course.description.toLowerCase().includes(searchTerm))) {
+                            return false;
+                        }
+                    }
+
+                    // Credits filter
+                    if (this.filters.credits) {
+                        if (!this.matchesCreditsFilter(course.credits, this.filters.credits)) {
+                            return false;
+                        }
+                    }
+
+                    // Status filter
+                    if (this.filters.status) {
+                        const isAssigned = course.studentId !== null;
+                        if (this.filters.status === 'assigned' && !isAssigned) return false;
+                        if (this.filters.status === 'unassigned' && isAssigned) return false;
+                    }
+
+                    return true;
+                });
+
+                this.applySorting();
+                this.currentPage = 1; // Reset to first page
+                this.renderCourses();
+            }
+
+            matchesCreditsFilter(credits, filter) {
+                switch(filter) {
+                    case '1-2 credits': return credits >= 1 && credits <= 2;
+                    case '3-4 credits': return credits >= 3 && credits <= 4;
+                    case '5+ credits': return credits >= 5;
+                    default: return true;
+                }
+            }
+
+            applySorting() {
+                this.filteredCourses.sort((a, b) => {
+                    switch(this.currentSort) {
+                        case 'title':
+                            return a.title.localeCompare(b.title);
+                        case 'title-desc':
+                            return b.title.localeCompare(a.title);
+                        case 'credits':
+                            return a.credits - b.credits;
+                        case 'credits-desc':
+                            return b.credits - a.credits;
+                        case 'recent':
+                            return b.courseId - a.courseId; // Assuming higher ID = more recent
+                        default:
+                            return 0;
+                    }
+                });
+            }
+
+            renderPagination() {
+                const pagination = document.getElementById('pagination');
+                const totalPages = Math.ceil(this.filteredCourses.length / this.pageSize);
+
+                if (totalPages <= 1) {
+                    pagination.innerHTML = '';
+                    this.updateShowingRange();
+                    return;
+                }
+
+                let paginationHTML = '';
+
+                // Previous button
+                paginationHTML += `
+                    <li class="page-item ${this.currentPage === 1 ? 'disabled' : ''}">
+                        <button class="page-link" onclick="courseManager.goToPage(${this.currentPage - 1})"
+                                ${this.currentPage === 1 ? 'disabled' : ''}>
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                    </li>
+                `;
+
+                // Page numbers
+                const startPage = Math.max(1, this.currentPage - 2);
+                const endPage = Math.min(totalPages, this.currentPage + 2);
+
+                if (startPage > 1) {
+                    paginationHTML += `<li class="page-item"><button class="page-link" onclick="courseManager.goToPage(1)">1</button></li>`;
+                    if (startPage > 2) {
+                        paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                    }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    paginationHTML += `
+                        <li class="page-item ${i === this.currentPage ? 'active' : ''}">
+                            <button class="page-link" onclick="courseManager.goToPage(${i})">${i}</button>
+                        </li>
+                    `;
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                    }
+                    paginationHTML += `<li class="page-item"><button class="page-link" onclick="courseManager.goToPage(${totalPages})">${totalPages}</button></li>`;
+                }
+
+                // Next button
+                paginationHTML += `
+                    <li class="page-item ${this.currentPage === totalPages ? 'disabled' : ''}">
+                        <button class="page-link" onclick="courseManager.goToPage(${this.currentPage + 1})"
+                                ${this.currentPage === totalPages ? 'disabled' : ''}>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </li>
+                `;
+
+                pagination.innerHTML = paginationHTML;
+                this.updateShowingRange();
+            }
+
+            updateShowingRange() {
+                const startIndex = (this.currentPage - 1) * this.pageSize + 1;
+                const endIndex = Math.min(this.currentPage * this.pageSize, this.filteredCourses.length);
+
+                document.getElementById('showing-range').textContent =
+                    this.filteredCourses.length === 0 ? '0-0' : `${startIndex}-${endIndex}`;
+                document.getElementById('total-results').textContent = this.filteredCourses.length;
+            }
+
+            goToPage(page) {
+                this.currentPage = page;
+                this.renderCourses();
+
+                // Scroll to top smoothly
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            setupAutoRefresh() {
+                if (window.courseData.config.refreshInterval > 0) {
+                    setInterval(async () => {
+                        try {
+                            await this.loadCourses();
+                            // Only re-render if we're still on the first page to avoid disrupting user navigation
+                            if (this.currentPage === 1) {
+                                this.applyFilters();
+                            }
+                        } catch (error) {
+                            console.error('Auto-refresh failed:', error);
+                        }
+                    }, window.courseData.config.refreshInterval);
+                }
+            }
+
+            showSuccess(message) {
+                document.getElementById('successMessage').textContent = message;
+                const toast = new bootstrap.Toast(document.getElementById('successToast'));
+                toast.show();
+            }
+
+            showError(message) {
+                document.getElementById('errorMessage').textContent = message;
+                const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+                toast.show();
+            }
+        }
+
+        // Initialize the course manager
+        let courseManager;
+        document.addEventListener('DOMContentLoaded', function() {
+            courseManager = new CourseManager();
+        });
+
+        // Global functions called from HTML
+        function filterBy(status) {
+            document.getElementById('statusFilter').value = status === 'all' ? '' : status;
+            courseManager.filters.status = status === 'all' ? '' : status;
+            courseManager.applyFilters();
+        }
+
+        function setViewMode(mode) {
+            // Update button states
+            document.querySelectorAll('#gridViewBtn, #listViewBtn, #tableViewBtn').forEach(btn =>
+                btn.classList.remove('active'));
+            document.getElementById(mode + 'ViewBtn').classList.add('active');
+
+            courseManager.currentView = mode;
+            courseManager.renderCourses();
+        }
+
+        function applyFilters() {
+            courseManager.filters.credits = document.getElementById('creditsFilter').value;
+            courseManager.filters.status = document.getElementById('statusFilter').value;
+            courseManager.applyFilters();
+        }
+
+        function applySorting() {
+            courseManager.currentSort = document.getElementById('sortBy').value;
+            courseManager.applySorting();
+            courseManager.renderCourses();
+        }
+
+        function performLiveSearch() {
+            // This is handled by the event listener in setupEventListeners()
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            courseManager.filters.search = '';
+            courseManager.applyFilters();
+        }
+
+        function quickFilter(type) {
+            switch(type) {
+                case 'high-credits':
+                    document.getElementById('creditsFilter').value = '5+ credits';
+                    courseManager.filters.credits = '5+ credits';
+                    break;
+                case 'unassigned':
+                    document.getElementById('statusFilter').value = 'unassigned';
+                    courseManager.filters.status = 'unassigned';
+                    break;
+                case 'popular':
+                    document.getElementById('sortBy').value = 'credits-desc';
+                    courseManager.currentSort = 'credits-desc';
+                    break;
+            }
+            courseManager.applyFilters();
+        }
+
+        function resetFilters() {
+            // Reset all filter controls
+            document.getElementById('searchInput').value = '';
+            document.getElementById('creditsFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('sortBy').value = 'title';
+
+            // Reset filter state
+            courseManager.filters = { search: '', credits: '', status: '', category: '' };
+            courseManager.currentSort = 'title';
+            courseManager.applyFilters();
+        }
+
+        function refreshCourses() {
+            const refreshIcon = document.getElementById('refresh-icon');
+            refreshIcon.classList.add('fa-spin');
+
+            courseManager.loadCourses().then(() => {
+                courseManager.applyFilters();
+                courseManager.showSuccess('Courses refreshed successfully');
+            }).finally(() => {
+                setTimeout(() => refreshIcon.classList.remove('fa-spin'), 500);
+            });
+        }
+
+        function showAddCourseModal() {
+            const modal = new bootstrap.Modal(document.getElementById('addCourseModal'));
+            modal.show();
+        }
+
+        async function addCourse(event) {
+            event.preventDefault();
+
+            const formData = {
+                title: document.getElementById('courseTitle').value,
+                credits: parseInt(document.getElementById('courseCredits').value),
+                description: document.getElementById('courseDescription').value,
+                studentId: document.getElementById('assignToStudent').value || null
+            };
+
+            try {
+                const response = await fetch(window.courseData.urls.courses, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('addCourseModal')).hide();
+                    document.getElementById('addCourseForm').reset();
+                    await courseManager.loadCourses();
+                    courseManager.applyFilters();
+                    courseManager.showSuccess('Course added successfully!');
+                } else {
+                    const error = await response.json();
+                    courseManager.showError(error.message || 'Failed to add course');
+                }
+            } catch (error) {
+                courseManager.showError('Error adding course: ' + error.message);
+            }
+        }
+
+        function viewCourseDetails(courseId) {
+            window.location.href = window.courseData.contextPath + 'course/' + courseId;
+        }
+
+        // Additional functions for edit, delete, assign, etc. would go here...
+        function editCourse(courseId) {
+            // Implementation for editing course
+            console.log('Edit course:', courseId);
+        }
+
+        function confirmDeleteCourse(courseId, title) {
+            if (confirm(`Are you sure you want to delete "${title}"?`)) {
+                deleteCourse(courseId);
+            }
+        }
+
+        async function deleteCourse(courseId) {
+            try {
+                const response = await fetch(`${window.courseData.urls.courses}/${courseId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await courseManager.loadCourses();
+                    courseManager.applyFilters();
+                    courseManager.showSuccess('Course deleted successfully');
+                } else {
+                    courseManager.showError('Failed to delete course');
+                }
+            } catch (error) {
+                courseManager.showError('Error deleting course: ' + error.message);
+            }
+        }
+
+        function showAssignModal(courseId) {
+            // Implementation for showing assign modal
+            console.log('Show assign modal for course:', courseId);
+        }
+
+        async function unassignCourse(courseId) {
+            try {
+                const response = await fetch(`${window.courseData.urls.unassign}/${courseId}`, {
+                    method: 'PUT'
+                });
+
+                if (response.ok) {
+                    await courseManager.loadCourses();
+                    courseManager.applyFilters();
+                    courseManager.showSuccess('Course unassigned successfully');
+                } else {
+                    courseManager.showError('Failed to unassign course');
+                }
+            } catch (error) {
+                courseManager.showError('Error unassigning course: ' + error.message);
+            }
+        }
+
+        function showBulkAssignModal() {
+            const modal = new bootstrap.Modal(document.getElementById('bulkAssignModal'));
+            modal.show();
+        }
+
+        function exportCourses(format) {
+            const url = `${window.courseData.urls.courses}/export?format=${format}`;
+            window.open(url, '_blank');
+        }
+    </script>
+</body>
+</html>

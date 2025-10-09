@@ -1,58 +1,35 @@
 package com.example.crud_app.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "courses")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long courseId;
 
+    @NotBlank(message = "Title is required")
     private String title;
-    private int credits;
 
-    @ManyToOne
-    @JoinColumn(name = "student_id")
-    private Student student;
+    @Min(value = 1, message = "Credits must be at least 1")
+    @Max(value = 6, message = "Credits must be at most 6")
+    @NotNull(message = "Credits are required")
+    private Integer credits;
 
-    public Course() {}
-
-    public Course(int credits, Student student, String title) {
-        this.credits = credits;
-        this.student = student;
-        this.title = title;
-    }
-
-    public Long getCourseId() {
-        return courseId;
-    }
-
-    public void setCourseId(Long courseId) {
-        this.courseId = courseId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public int getCredits() {
-        return credits;
-    }
-
-    public void setCredits(int credits) {
-        this.credits = credits;
-    }
-
-    public Student getStudent() {
-        return student;
-    }
-
-    public void setStudent(Student student) {
-        this.student = student;
-    }
+    // Manual foreign key instead of @ManyToOne
+    @Column(name = "student_id")
+    private Long studentId;  // Foreign key reference to Student
 }

@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle} + ' - Student Management System'">Student Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/style.css}">
+    <!-- Chart.js for course progress visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .student-avatar {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: white;
+            font-weight: bold;
+        }
+        .course-progress-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        .course-progress-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-left-color: #28a745;
+        }
+        .activity-timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        .activity-timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            height: 100%;
+            width: 2px;
+            background: #dee2e6;
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -23px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #007bff;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #007bff;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+        }
+        .grade-badge {
+            font-size: 1.2rem;
+            padding: 0.5rem 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Server Data for JavaScript -->
+    <script th:inline="javascript">
+        // Student data passed from server
+        window.studentData = {
+            student: {
+                studentId: [[${student.studentId}]],
+                name: /*[[${student.name}]]*/ 'Student Name',
+                email: /*[[${student.email}]]*/ 'email@example.com',
+                age: [[${student.age}]],
+                enrollmentDate: /*[[${student.createdAt}]]*/ new Date()
+            },
+            courses: [[${studentCourses}]],
+            totalCredits: [[${totalCredits ?: 0}]],
+            contextPath: /*[[@{/}]]*/ '/',
+
+            // API endpoints
+            endpoints: {
+                updateStudent: /*[[@{/api/students/}]]*/ '/api/students/' + [[${student.studentId}]],
+                addCourse: /*[[@{/api/courses}]]*/ '/api/courses',
+                removeCourse: /*[[@{/api/courses/unassign/}]]*/ '/api/courses/unassign/',
+                getGrades: /*[[@{/api/students/}]]*/ '/api/students/' + [[${student.studentId}]] + '/grades'
+            },
+
+            // Configuration
+            config: {
+                maxCoursesPerStudent: 8,
+                creditLimits: { min: 12, max: 18 },
+                refreshInterval: 15000
+            }
+        };
+    </script>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-graduation-cap"></i> Student Management System</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                    <a class="nav-link active" href="/students"><i class="fas fa-users"></i> Students</a>
+                    <a class="nav-link" href="/courses"><i class="fas fa-book"></i> Courses</a>
+                    <a class="nav-link" href="/jpql-demo"><i class="fas fa-code"></i> JPQL Demo</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="/students">Students</a></li>
+                <li class="breadcrumb-item active" th:text="${student.name}">Student Details</li>
+            </ol>
+        </nav>
+
+        <!-- Student Header -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-2 text-center">
+                                <div class="student-avatar" th:data-initials="${#strings.substring(student.name, 0, 1)}">
+                                    <span th:text="${#strings.substring(student.name, 0, 1)}">S</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h1 class="mb-2" th:text="${student.name}">Student Name</h1>
+                                <p class="text-muted mb-1">
+                                    <i class="fas fa-envelope"></i> <span th:text="${student.email}">email@example.com</span>
+                                </p>
+                                <p class="text-muted mb-1">
+                                    <i class="fas fa-birthday-cake"></i> <span th:text="${student.age} + ' years old'">Age</span>
+                                </p>
+                                <p class="text-muted mb-0">
+                                    <i class="fas fa-calendar"></i> Student ID: <span th:text="${student.studentId}">ID</span>
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-outline-primary" onclick="editStudent()">
+                                        <i class="fas fa-edit"></i> Edit Profile
+                                    </button>
+                                    <button class="btn btn-success" onclick="addCourse()">
+                                        <i class="fas fa-plus"></i> Add Course
+                                    </button>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                            <i class="fas fa-download"></i> Export
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="#" onclick="exportTranscript()">
+                                                <i class="fas fa-file-pdf"></i> Transcript PDF</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="exportProgress()">
+                                                <i class="fas fa-chart-line"></i> Progress Report</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card h-100">
+                    <div class="card-body text-center">
+                        <h3 id="total-courses" th:text="${studentCourses != null ? studentCourses.size() : 0}">0</h3>
+                        <p class="mb-0">Enrolled Courses</p>
+                        <small>Current Semester</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-success h-100">
+                    <div class="card-body text-center">
+                        <h3 id="total-credits" th:text="${totalCredits ?: 0}">0</h3>
+                        <p class="mb-0">Total Credits</p>
+                        <small>Enrolled</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info h-100">
+                    <div class="card-body text-center">
+                        <h3 id="avg-grade">A-</h3>
+                        <p class="mb-0">Average Grade</p>
+                        <small>Current GPA: <span id="gpa">3.7</span></small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning h-100">
+                    <div class="card-body text-center">
+                        <h3 id="completion-rate">85%</h3>
+                        <p class="mb-0">Completion Rate</p>
+                        <small>On Track</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Row -->
+        <div class="row">
+            <!-- Course Progress -->
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-book-open"></i> Course Progress
+                        </h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary active"
+                                    onclick="showCourseView('grid')" id="gridViewBtn">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary"
+                                    onclick="showCourseView('list')" id="listViewBtn">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="courses-container">
+                            <!-- Grid View -->
+                            <div id="courses-grid-view">
+                                <div class="row" th:if="${studentCourses != null and !studentCourses.empty}">
+                                    <div class="col-md-6 mb-3" th:each="course : ${studentCourses}">
+                                        <div class="card course-progress-card h-100">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <h6 class="card-title mb-0" th:text="${course.title}">Course Title</h6>
+                                                    <span class="badge bg-primary" th:text="${course.credits} + ' Credits'">Credits</span>
+                                                </div>
+                                                <p class="card-text text-muted small mb-3">Course ID: <span th:text="${course.courseId}">ID</span></p>
+
+                                                <!-- Progress Bar (simulated) -->
+                                                <div class="mb-3">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <small class="text-muted">Progress</small>
+                                                        <small class="text-muted"><span class="progress-percentage">75</span>%</small>
+                                                    </div>
+                                                    <div class="progress" style="height: 6px;">
+                                                        <div class="progress-bar bg-success" style="width: 75%"></div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Grade Badge -->
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="badge grade-badge bg-success">A-</span>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-outline-info"
+                                                                th:onclick="'viewCourseDetails(' + ${course.courseId} + ')'"
+                                                                title="View details">
+                                                            <i class="fas fa-eye"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger"
+                                                                th:onclick="'removeCourse(' + ${course.courseId} + ')'"
+                                                                title="Unenroll">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Empty State -->
+                                <div th:if="${studentCourses == null or studentCourses.empty}" class="text-center py-5">
+                                    <i class="fas fa-book-open fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No Courses Enrolled</h5>
+                                    <p class="text-muted">This student is not currently enrolled in any courses.</p>
+                                    <button class="btn btn-primary" onclick="addCourse()">
+                                        <i class="fas fa-plus"></i> Enroll in Course
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- List View -->
+                            <div id="courses-list-view" class="d-none">
+                                <div class="table-responsive" th:if="${studentCourses != null and !studentCourses.empty}">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Course</th>
+                                                <th>Credits</th>
+                                                <th>Progress</th>
+                                                <th>Grade</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr th:each="course : ${studentCourses}">
+                                                <td>
+                                                    <strong th:text="${course.title}">Course Title</strong><br>
+                                                    <small class="text-muted">ID: <span th:text="${course.courseId}">ID</span></small>
+                                                </td>
+                                                <td><span class="badge bg-primary" th:text="${course.credits}">Credits</span></td>
+                                                <td>
+                                                    <div class="progress" style="width: 100px; height: 8px;">
+                                                        <div class="progress-bar bg-success" style="width: 75%"></div>
+                                                    </div>
+                                                    <small>75%</small>
+                                                </td>
+                                                <td><span class="badge grade-badge bg-success">A-</span></td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-outline-info"
+                                                                th:onclick="'viewCourseDetails(' + ${course.courseId} + ')'">
+                                                            <i class="fas fa-eye"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger"
+                                                                th:onclick="'removeCourse(' + ${course.courseId} + ')'">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line"></i> Academic Performance
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="performanceChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-md-4">
+                <!-- Quick Actions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bolt"></i> Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="addCourse()">
+                                <i class="fas fa-plus"></i> Add New Course
+                            </button>
+                            <button class="btn btn-success" onclick="generateTranscript()">
+                                <i class="fas fa-file-alt"></i> Generate Transcript
+                            </button>
+                            <button class="btn btn-info" onclick="scheduleAppointment()">
+                                <i class="fas fa-calendar-plus"></i> Schedule Meeting
+                            </button>
+                            <button class="btn btn-warning" onclick="sendNotification()">
+                                <i class="fas fa-bell"></i> Send Notification
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i> Recent Activity
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="activity-timeline">
+                            <div class="timeline-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>Enrolled in Course</strong>
+                                    <small class="text-muted">2 hours ago</small>
+                                </div>
+                                <p class="text-muted mb-0">Added "Advanced JavaScript" course</p>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>Grade Updated</strong>
+                                    <small class="text-muted">1 day ago</small>
+                                </div>
+                                <p class="text-muted mb-0">Received A- in Database Design</p>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>Profile Updated</strong>
+                                    <small class="text-muted">3 days ago</small>
+                                </div>
+                                <p class="text-muted mb-0">Updated contact information</p>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>Assignment Submitted</strong>
+                                    <small class="text-muted">1 week ago</small>
+                                </div>
+                                <p class="text-muted mb-0">Submitted final project for Web Development</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Academic Summary -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-graduation-cap"></i> Academic Summary
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <h4 class="text-primary" id="semester-gpa">3.7</h4>
+                                <small class="text-muted">Current GPA</small>
+                            </div>
+                            <div class="col-6">
+                                <h4 class="text-success" id="credits-earned">45</h4>
+                                <small class="text-muted">Credits Earned</small>
+                            </div>
+                        </div>
+
+                        <div class="progress mb-3">
+                            <div class="progress-bar bg-success" style="width: 45%" id="degree-progress">
+                                <small>45% to Degree</small>
+                            </div>
+                        </div>
+
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item d-flex justify-content-between px-0">
+                                <span>Class Rank</span>
+                                <strong>15 of 120</strong>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between px-0">
+                                <span>Dean's List</span>
+                                <strong class="text-success">Yes</strong>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between px-0">
+                                <span>Expected Graduation</span>
+                                <strong>May 2025</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Student Modal -->
+    <div class="modal fade" id="editStudentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit"></i> Edit Student Profile
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editStudentForm" onsubmit="updateStudent(event)">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="editName" class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="editName"
+                                   th:value="${student.name}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editEmail" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="editEmail"
+                                   th:value="${student.email}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editAge" class="form-label">Age</label>
+                            <input type="number" class="form-control" id="editAge"
+                                   th:value="${student.age}" min="16" max="100" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Update Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Course Modal -->
+    <div class="modal fade" id="addCourseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus"></i> Enroll in Course
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="courseSelect" class="form-label">Available Courses</label>
+                        <select class="form-select" id="courseSelect" required>
+                            <option value="">Select a course...</option>
+                            <!-- Populated by JavaScript -->
+                        </select>
+                    </div>
+                    <div id="coursePreview" class="card d-none">
+                        <div class="card-body">
+                            <h6 id="previewTitle">Course Title</h6>
+                            <p class="text-muted mb-2" id="previewCredits">Credits: 0</p>
+                            <p class="text-muted small" id="previewDescription">Course description...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="enrollInCourse()">
+                        <i class="fas fa-check"></i> Enroll
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="successMessage">Success!</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+        <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="errorMessage">Error occurred!</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Student Detail Management JavaScript -->
+    <script th:inline="javascript">
+        // Student Detail Manager Class
+        class StudentDetailManager {
+            constructor() {
+                this.student = window.studentData.student;
+                this.courses = window.studentData.courses || [];
+                this.availableCourses = [];
+                this.performanceChart = null;
+
+                this.init();
+            }
+
+            init() {
+                this.loadAvailableCourses();
+                this.initializePerformanceChart();
+                this.simulateRealTimeUpdates();
+                this.setupEventListeners();
+
+                console.log('Student Detail Manager initialized for:', this.student.name);
+            }
+
+            setupEventListeners() {
+                // Auto-save form changes
+                document.addEventListener('input', (e) => {
+                    if (e.target.form && e.target.form.id === 'editStudentForm') {
+                        this.validateForm(e.target.form);
+                    }
+                });
+
+                // Course selection preview
+                document.getElementById('courseSelect').addEventListener('change', (e) => {
+                    this.showCoursePreview(e.target.value);
+                });
+            }
+
+            async loadAvailableCourses() {
+                try {
+                    const response = await fetch('/api/courses/unassigned');
+                    this.availableCourses = await response.json();
+                    this.populateCourseDropdown();
+                } catch (error) {
+                    console.error('Failed to load available courses:', error);
+                    // Fallback to mock data
+                    this.availableCourses = [
+                        { courseId: 1, title: 'Advanced JavaScript', credits: 4 },
+                        { courseId: 2, title: 'Database Design', credits: 3 },
+                        { courseId: 3, title: 'Web Security', credits: 3 }
+                    ];
+                    this.populateCourseDropdown();
+                }
+            }
+
+            populateCourseDropdown() {
+                const select = document.getElementById('courseSelect');
+                select.innerHTML = '<option value="">Select a course...</option>';
+
+                this.availableCourses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.courseId;
+                    option.textContent = `${course.title} (${course.credits} credits)`;
+                    option.dataset.course = JSON.stringify(course);
+                    select.appendChild(option);
+                });
+            }
+
+            showCoursePreview(courseId) {
+                const preview = document.getElementById('coursePreview');
+
+                if (!courseId) {
+                    preview.classList.add('d-none');
+                    return;
+                }
+
+                const course = this.availableCourses.find(c => c.courseId == courseId);
+                if (course) {
+                    document.getElementById('previewTitle').textContent = course.title;
+                    document.getElementById('previewCredits').textContent = `Credits: ${course.credits}`;
+                    document.getElementById('previewDescription').textContent =
+                        course.description || 'No description available.';
+                    preview.classList.remove('d-none');
+                }
+            }
+
+            initializePerformanceChart() {
+                const ctx = document.getElementById('performanceChart').getContext('2d');
+
+                // Simulate semester performance data
+                const semesterData = {
+                    labels: ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'],
+                    datasets: [{
+                        label: 'GPA',
+                        data: [3.2, 3.5, 3.6, 3.7],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Credits per Semester',
+                        data: [12, 15, 16, 15],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }]
+                };
+
+                this.performanceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: semesterData,
+                    options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                min: 0,
+                                max: 4.0,
+                                title: {
+                                    display: true,
+                                    text: 'GPA'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                min: 0,
+                                max: 20,
+                                title: {
+                                    display: true,
+                                    text: 'Credits'
+                                },
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Academic Performance Over Time'
+                            }
+                        }
+                    }
+                });
+            }
+
+            simulateRealTimeUpdates() {
+                // Simulate real-time grade updates
+                setInterval(() => {
+                    this.updateGradeDisplays();
+                }, 30000); // Every 30 seconds
+            }
+
+            updateGradeDisplays() {
+                // Simulate random grade updates
+                const grades = ['A+', 'A', 'A-', 'B+', 'B', 'B-'];
+                const gradeElements = document.querySelectorAll('.grade-badge');
+
+                gradeElements.forEach(element => {
+                    if (Math.random() < 0.1) { // 10% chance of update
+                        const randomGrade = grades[Math.floor(Math.random() * grades.length)];
+                        element.textContent = randomGrade;
+
+                        // Add animation effect
+                        element.style.transform = 'scale(1.1)';
+                        setTimeout(() => {
+                            element.style.transform = 'scale(1)';
+                        }, 300);
+                    }
+                });
+            }
+
+            async enrollInCourse() {
+                const courseId = document.getElementById('courseSelect').value;
+
+                if (!courseId) {
+                    this.showToast('error', 'Please select a course');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/courses/assign', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            courseId: parseInt(courseId),
+                            studentId: this.student.studentId
+                        })
+                    });
+
+                    if (response.ok) {
+                        // Close modal
+                        bootstrap.Modal.getInstance(document.getElementById('addCourseModal')).hide();
+
+                        // Refresh course list
+                        this.refreshCourseList();
+                        this.showToast('success', 'Successfully enrolled in course!');
+                    } else {
+                        this.showToast('error', 'Failed to enroll in course');
+                    }
+                } catch (error) {
+                    console.error('Error enrolling in course:', error);
+                    this.showToast('error', 'Error occurred while enrolling');
+                }
+            }
+
+            async removeCourse(courseId) {
+                if (!confirm('Are you sure you want to unenroll from this course?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/courses/unassign/${courseId}`, {
+                        method: 'PUT'
+                    });
+
+                    if (response.ok) {
+                        this.refreshCourseList();
+                        this.showToast('success', 'Successfully unenrolled from course');
+                    } else {
+                        this.showToast('error', 'Failed to unenroll from course');
+                    }
+                } catch (error) {
+                    console.error('Error removing course:', error);
+                    this.showToast('error', 'Error occurred while unenrolling');
+                }
+            }
+
+            async updateStudent(event) {
+                event.preventDefault();
+
+                const formData = {
+                    name: document.getElementById('editName').value,
+                    email: document.getElementById('editEmail').value,
+                    age: parseInt(document.getElementById('editAge').value)
+                };
+
+                try {
+                    const response = await fetch(window.studentData.endpoints.updateStudent, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (response.ok) {
+                        const updatedStudent = await response.json();
+
+                        // Update UI
+                        this.updateStudentDisplay(updatedStudent);
+
+                        // Close modal
+                        bootstrap.Modal.getInstance(document.getElementById('editStudentModal')).hide();
+
+                        this.showToast('success', 'Profile updated successfully!');
+                    } else {
+                        this.showToast('error', 'Failed to update profile');
+                    }
+                } catch (error) {
+                    console.error('Error updating student:', error);
+                    this.showToast('error', 'Error occurred while updating');
+                }
+            }
+
+            updateStudentDisplay(student) {
+                // Update page title and breadcrumb
+                document.title = `${student.name} - Student Management System`;
+
+                // Update header information
+                document.querySelector('h1').textContent = student.name;
+                document.querySelector('.fa-envelope').nextElementSibling.textContent = student.email;
+                document.querySelector('.fa-birthday-cake').nextElementSibling.textContent = `${student.age} years old`;
+
+                // Update avatar initials
+                document.querySelector('.student-avatar span').textContent = student.name.charAt(0);
+
+                this.student = student;
+            }
+
+            refreshCourseList() {
+                // Reload the page to refresh course list
+                // In a real application, you would update the course list dynamically
+                window.location.reload();
+            }
+
+            validateForm(form) {
+                const inputs = form.querySelectorAll('input[required]');
+                let isValid = true;
+
+                inputs.forEach(input => {
+                    if (!input.value.trim()) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                    } else {
+                        input.classList.remove('is-invalid');
+                    }
+                });
+
+                return isValid;
+            }
+
+            showToast(type, message) {
+                document.getElementById(type + 'Message').textContent = message;
+                const toast = new bootstrap.Toast(document.getElementById(type + 'Toast'));
+                toast.show();
+            }
+        }
+
+        // Initialize the Student Detail Manager
+        let studentDetailManager;
+        document.addEventListener('DOMContentLoaded', function() {
+            studentDetailManager = new StudentDetailManager();
+        });
+
+        // Global functions for HTML onclick handlers
+        function showCourseView(viewType) {
+            const gridView = document.getElementById('courses-grid-view');
+            const listView = document.getElementById('courses-list-view');
+            const gridBtn = document.getElementById('gridViewBtn');
+            const listBtn = document.getElementById('listViewBtn');
+
+            if (viewType === 'grid') {
+                gridView.classList.remove('d-none');
+                listView.classList.add('d-none');
+                gridBtn.classList.add('active');
+                listBtn.classList.remove('active');
+            } else {
+                gridView.classList.add('d-none');
+                listView.classList.remove('d-none');
+                gridBtn.classList.remove('active');
+                listBtn.classList.add('active');
+            }
+        }
+
+        function editStudent() {
+            const modal = new bootstrap.Modal(document.getElementById('editStudentModal'));
+            modal.show();
+        }
+
+        function addCourse() {
+            const modal = new bootstrap.Modal(document.getElementById('addCourseModal'));
+            modal.show();
+        }
+
+        function enrollInCourse() {
+            studentDetailManager.enrollInCourse();
+        }
+
+        function removeCourse(courseId) {
+            studentDetailManager.removeCourse(courseId);
+        }
+
+        function updateStudent(event) {
+            studentDetailManager.updateStudent(event);
+        }
+
+        function viewCourseDetails(courseId) {
+            window.location.href = `/course/${courseId}`;
+        }
+
+        function exportTranscript() {
+            studentDetailManager.showToast('info', 'Generating transcript PDF...');
+            // Implementation for PDF export
+        }
+
+        function exportProgress() {
+            studentDetailManager.showToast('info', 'Generating progress report...');
+            // Implementation for progress report
+        }
+
+        function generateTranscript() {
+            studentDetailManager.showToast('info', 'Generating official transcript...');
+        }
+
+        function scheduleAppointment() {
+            studentDetailManager.showToast('info', 'Opening appointment scheduler...');
+        }
+
+        function sendNotification() {
+            studentDetailManager.showToast('info', 'Sending notification to student...');
+        }
+    </script>
+</body>
+</html>
+

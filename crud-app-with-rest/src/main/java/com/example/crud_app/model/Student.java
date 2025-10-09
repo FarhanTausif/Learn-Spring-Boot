@@ -1,65 +1,38 @@
 package com.example.crud_app.model;
 
 import jakarta.persistence.*;
-
-import java.util.ArrayList;
-import java.util.List;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "students")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Student {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long studentId;
 
+    @NotBlank(message = "Name is required")
     private String name;
+
+    @Email(message = "Email should be valid")
+    @NotBlank(message = "Email is required")
     private String email;
-    private int age;
 
-    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL)
-    private List<Course> courses = new ArrayList<>();
+    @Min(value = 16, message = "Age must be at least 16")
+    @Max(value = 100, message = "Age must be at most 100")
+    @NotNull(message = "Age is required")
+    private Integer age;
 
-    public Student() {}
-
-    public Student(String name, String email, int age) {
-        this.name = name;
-        this.email = email;
-        this.age = age;
-    }
-
-    public Long getStudentId() {
-        return studentId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public int getAge() {
-        return age;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public void setAge(int age) {
-        this.age = age;
-    }
-
-    public List<Course> getCourses() {
-        return courses;
-    }
-
-    public void setCourses(List<Course> courses) {
-        this.courses = courses;
-    }
+    // No @OneToMany annotation - manual relationship handling
 }
