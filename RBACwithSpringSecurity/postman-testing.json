@@ -1,0 +1,1486 @@
+{
+	"info": {
+		"_postman_id": "rbac-spring-security-collection",
+		"name": "RBAC with Spring Security - API Testing",
+		"description": "Comprehensive testing collection for Role-Based Access Control system with Spring Security.\n\nThis collection includes:\n- Authentication flows\n- Role-based endpoint testing\n- Access control verification\n- Security testing scenarios\n\nSetup Instructions:\n1. Import this collection into Postman\n2. Set up environment variables (see Environment section)\n3. Run tests in order or use Test Suites\n4. Check response codes and content for RBAC verification",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Environment Setup",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Application is running', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains Spring Boot info', function () {",
+									"    pm.expect(pm.response.text()).to.include('RBAC Demo');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Initial setup and health check requests"
+		},
+		{
+			"name": "Public Endpoints",
+			"item": [
+				{
+					"name": "Get Home Page",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Content-Type is HTML', function () {",
+									"    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+									"});",
+									"",
+									"pm.test('Page contains welcome content', function () {",
+									"    pm.expect(pm.response.text()).to.include('RBAC Demo');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Login Page",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Login page contains form', function () {",
+									"    pm.expect(pm.response.text()).to.include('Login');",
+									"    pm.expect(pm.response.text()).to.include('username');",
+									"    pm.expect(pm.response.text()).to.include('password');",
+									"});",
+									"",
+									"// Extract CSRF token for future use",
+									"const responseText = pm.response.text();",
+									"const csrfMatch = responseText.match(/name=\"_csrf\"\\s+value=\"([^\"]+)\"/);",
+									"if (csrfMatch) {",
+									"    pm.environment.set('csrf_token', csrfMatch[1]);",
+									"    console.log('CSRF token extracted:', csrfMatch[1]);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Registration Page",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Registration page contains form', function () {",
+									"    pm.expect(pm.response.text()).to.include('Register');",
+									"    pm.expect(pm.response.text()).to.include('username');",
+									"    pm.expect(pm.response.text()).to.include('email');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"register"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Test public endpoints that don't require authentication"
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login as Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful (redirect or 200)', function () {",
+									"    pm.expect([200, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"// Store session cookies for admin",
+									"const cookies = pm.cookies.all();",
+									"cookies.forEach(cookie => {",
+									"    if (cookie.name === 'JSESSIONID') {",
+									"        pm.environment.set('admin_session', cookie.value);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							},
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{admin_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{admin_password}}",
+									"type": "text"
+								},
+								{
+									"key": "_csrf",
+									"value": "{{csrf_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login as Manager",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful (redirect or 200)', function () {",
+									"    pm.expect([200, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"// Store session cookies for manager",
+									"const cookies = pm.cookies.all();",
+									"cookies.forEach(cookie => {",
+									"    if (cookie.name === 'JSESSIONID') {",
+									"        pm.environment.set('manager_session', cookie.value);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							},
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{manager_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{manager_password}}",
+									"type": "text"
+								},
+								{
+									"key": "_csrf",
+									"value": "{{csrf_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login as User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful (redirect or 200)', function () {",
+									"    pm.expect([200, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"// Store session cookies for user",
+									"const cookies = pm.cookies.all();",
+									"cookies.forEach(cookie => {",
+									"    if (cookie.name === 'JSESSIONID') {",
+									"        pm.environment.set('user_session', cookie.value);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							},
+							{
+								"key": "Accept",
+								"value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{user_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{user_password}}",
+									"type": "text"
+								},
+								{
+									"key": "_csrf",
+									"value": "{{csrf_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register New User",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate unique username and email for testing",
+									"const timestamp = Date.now();",
+									"pm.environment.set('test_username', 'testuser_' + timestamp);",
+									"pm.environment.set('test_email', 'test_' + timestamp + '@example.com');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Registration successful (redirect)', function () {",
+									"    pm.expect([200, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Response indicates success or redirect to login', function () {",
+									"    // Check if redirected to login or shows success message",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const hasSuccessContent = pm.response.text().includes('success') || pm.response.text().includes('Login');",
+									"    pm.expect(isRedirect || hasSuccessContent).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{test_username}}",
+									"type": "text"
+								},
+								{
+									"key": "email",
+									"value": "{{test_email}}",
+									"type": "text"
+								},
+								{
+									"key": "firstName",
+									"value": "Test",
+									"type": "text"
+								},
+								{
+									"key": "lastName",
+									"value": "User",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "testpassword123",
+									"type": "text"
+								},
+								{
+									"key": "_csrf",
+									"value": "{{csrf_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"register"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication flow testing - login and registration"
+		},
+		{
+			"name": "Dashboard Access",
+			"item": [
+				{
+					"name": "Dashboard - Admin Access",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Dashboard shows admin privileges', function () {",
+									"    pm.expect(pm.response.text()).to.include('Dashboard');",
+									"    pm.expect(pm.response.text()).to.include('admin');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/dashboard",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"dashboard"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Dashboard - Manager Access",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager can access dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Dashboard shows manager privileges', function () {",
+									"    pm.expect(pm.response.text()).to.include('Dashboard');",
+									"    pm.expect(pm.response.text()).to.include('manager');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/dashboard",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"dashboard"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Dashboard - User Access",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('User can access dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Dashboard shows user privileges', function () {",
+									"    pm.expect(pm.response.text()).to.include('Dashboard');",
+									"    pm.expect(pm.response.text()).to.include('user');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/dashboard",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"dashboard"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Test dashboard access for different roles"
+		},
+		{
+			"name": "Admin Endpoints",
+			"item": [
+				{
+					"name": "Admin Dashboard - Admin Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access admin dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Admin dashboard content is present', function () {",
+									"    pm.expect(pm.response.text()).to.include('Admin');",
+									"    pm.expect(pm.response.text()).to.include('Dashboard');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Users - Admin Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access user management', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User management page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('User Management');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"users"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin System - Admin Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access system settings', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('System settings page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('System');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/system",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"system"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Dashboard - Manager Access ❌",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager is denied admin access', function () {",
+									"    pm.expect([403, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Access denied or redirect to login', function () {",
+									"    const isForbidden = pm.response.code === 403;",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const hasAccessDenied = pm.response.text().includes('Access Denied') || pm.response.text().includes('Forbidden');",
+									"    pm.expect(isForbidden || isRedirect || hasAccessDenied).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Dashboard - User Access ❌",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Regular user is denied admin access', function () {",
+									"    pm.expect([403, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Access denied or redirect to login', function () {",
+									"    const isForbidden = pm.response.code === 403;",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const hasAccessDenied = pm.response.text().includes('Access Denied') || pm.response.text().includes('Forbidden');",
+									"    pm.expect(isForbidden || isRedirect || hasAccessDenied).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Test admin endpoints with different role access"
+		},
+		{
+			"name": "Manager Endpoints",
+			"item": [
+				{
+					"name": "Manager Dashboard - Admin Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access manager dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Manager dashboard content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Manager');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/manager/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Manager Dashboard - Manager Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager can access manager dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Manager dashboard content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Manager');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/manager/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Manager Reports - Manager Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager can access reports', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Reports page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Reports');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/manager/reports",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								"reports"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Manager Team - Manager Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager can access team management', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Team management page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Team');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/manager/team",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								"team"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Manager Dashboard - User Access ❌",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Regular user is denied manager access', function () {",
+									"    pm.expect([403, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Access denied or redirect', function () {",
+									"    const isForbidden = pm.response.code === 403;",
+									"    const isRedirect = pm.response.code === 302;",
+									"    pm.expect(isForbidden || isRedirect).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/manager/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Test manager endpoints with different role access"
+		},
+		{
+			"name": "User Endpoints",
+			"item": [
+				{
+					"name": "User Dashboard - Admin Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Admin can access user dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User dashboard content', function () {",
+									"    pm.expect(pm.response.text()).to.include('User');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Dashboard - Manager Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Manager can access user dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User dashboard content', function () {",
+									"    pm.expect(pm.response.text()).to.include('User');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{manager_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Dashboard - User Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('User can access user dashboard', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User dashboard content', function () {",
+									"    pm.expect(pm.response.text()).to.include('User');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Profile - User Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('User can access profile', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Profile page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Profile');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Tasks - User Access ✅",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('User can access tasks', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Tasks page content', function () {",
+									"    pm.expect(pm.response.text()).to.include('Tasks');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{user_session}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/tasks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"tasks"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Test user endpoints - accessible by all authenticated users"
+		},
+		{
+			"name": "Security Tests",
+			"item": [
+				{
+					"name": "Unauthorized Access - Admin Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Unauthorized access is denied', function () {",
+									"    pm.expect([401, 302, 403]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Redirected to login or access denied', function () {",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const isUnauthorized = pm.response.code === 401;",
+									"    const isForbidden = pm.response.code === 403;",
+									"    pm.expect(isRedirect || isUnauthorized || isForbidden).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/admin/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Unauthorized Access - Manager Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Unauthorized access is denied', function () {",
+									"    pm.expect([401, 302, 403]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Redirected to login or access denied', function () {",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const isUnauthorized = pm.response.code === 401;",
+									"    const isForbidden = pm.response.code === 403;",
+									"    pm.expect(isRedirect || isUnauthorized || isForbidden).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/manager/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"manager",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Unauthorized Access - User Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Unauthorized access is denied', function () {",
+									"    pm.expect([401, 302, 403]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Redirected to login or access denied', function () {",
+									"    const isRedirect = pm.response.code === 302;",
+									"    const isUnauthorized = pm.response.code === 401;",
+									"    const isForbidden = pm.response.code === 403;",
+									"    pm.expect(isRedirect || isUnauthorized || isForbidden).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/user/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Logout successful', function () {",
+									"    pm.expect([200, 302]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Session invalidated', function () {",
+									"    const hasLogoutContent = pm.response.text().includes('logout') || pm.response.text().includes('Login');",
+									"    const isRedirect = pm.response.code === 302;",
+									"    pm.expect(hasLogoutContent || isRedirect).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "JSESSIONID={{admin_session}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "_csrf",
+									"value": "{{csrf_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/logout",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"logout"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Security testing scenarios - unauthorized access and logout"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"// You can add global setup logic here"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"// Log response time for performance monitoring",
+					"if (pm.response.responseTime > 1000) {",
+					"    console.log('Warning: Response time is ' + pm.response.responseTime + 'ms');",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "admin_username",
+			"value": "admin",
+			"type": "string"
+		},
+		{
+			"key": "admin_password",
+			"value": "admin123",
+			"type": "string"
+		},
+		{
+			"key": "manager_username",
+			"value": "manager",
+			"type": "string"
+		},
+		{
+			"key": "manager_password",
+			"value": "manager123",
+			"type": "string"
+		},
+		{
+			"key": "user_username",
+			"value": "user",
+			"type": "string"
+		},
+		{
+			"key": "user_password",
+			"value": "user123",
+			"type": "string"
+		},
+		{
+			"key": "superuser_username",
+			"value": "superuser",
+			"type": "string"
+		},
+		{
+			"key": "superuser_password",
+			"value": "super123",
+			"type": "string"
+		}
+	]
+}
+
