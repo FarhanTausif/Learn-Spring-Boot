@@ -171,4 +171,48 @@ public class CourseService {
     public Long countCoursesByCredits(Integer credits) {
         return courseRepository.countByCredits(credits);
     }
+
+    // Course-Student relationship management methods
+    public Student getStudentForCourse(Long courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with id: " + courseId));
+
+        if (course.getStudentId() == null) {
+            return null; // Course is not assigned to any student
+        }
+
+        return studentRepository.findById(course.getStudentId())
+                .orElse(null); // Student might have been deleted
+    }
+
+    public List<Student> getStudentsTakingCourses() {
+        // Get all students who have at least one course assigned
+        List<Long> studentIds = courseRepository.findAll().stream()
+                .map(Course::getStudentId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        return studentRepository.findAllById(studentIds);
+    }
+
+    public void reassignCourse(Long courseId, Long newStudentId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with id: " + courseId));
+
+        // Verify new student exists
+        studentRepository.findById(newStudentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with id: " + newStudentId));
+
+        course.setStudentId(newStudentId);
+        courseRepository.save(course);
+    }
+
+    public void unassignCourse(Long courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with id: " + courseId));
+
+        course.setStudentId(null);
+        courseRepository.save(course);
+    }
 }

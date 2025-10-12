@@ -3,6 +3,7 @@ package com.example.crud_app.controller;
 import com.example.crud_app.dto.StudentSummaryDTO;
 import com.example.crud_app.dto.StudentWithCoursesDTO;
 import com.example.crud_app.model.Student;
+import com.example.crud_app.model.Course;
 import com.example.crud_app.service.StudentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,25 +24,73 @@ public class StudentController {
 
     private final StudentService studentService;
 
-    // Basic CRUD Operations
-
+    // GET /api/students - Get all students with optional filtering
     @GetMapping
-    public ResponseEntity<List<Student>> getAllStudents() {
-        List<Student> students = studentService.getAllStudents();
+    public ResponseEntity<List<Student>> getAllStudents(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer minAge,
+            @RequestParam(required = false) Integer maxAge,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false, defaultValue = "false") Boolean withoutCourses,
+            @RequestParam(required = false) Integer minCourses) {
+
+        List<Student> students;
+
+        // Apply filters based on query parameters
+        if (email != null) {
+            Optional<Student> studentOpt = studentService.findByEmail(email);
+            students = studentOpt.map(List::of).orElse(List.of());
+        } else if (search != null) {
+            students = studentService.searchStudents(search);
+        } else if (minAge != null && maxAge != null) {
+            students = studentService.getStudentsByAgeRange(minAge, maxAge);
+        } else if (minAge != null) {
+            students = studentService.getStudentsOlderThan(minAge);
+        } else {
+            students = studentService.getAllStudents();
+        }
+
         return ResponseEntity.ok(students);
     }
 
+    // GET /api/students/dto - Get students as DTO with course information
+    @GetMapping("/dto")
+    public ResponseEntity<List<StudentWithCoursesDTO>> getStudentsWithCourseStats(
+            @RequestParam(required = false, defaultValue = "false") Boolean withoutCourses,
+            @RequestParam(required = false) Integer minCourses) {
+
+        List<StudentWithCoursesDTO> students;
+
+        if (withoutCourses) {
+            students = studentService.getStudentsWithoutCourses();
+        } else if (minCourses != null) {
+            students = studentService.getStudentsWithMinimumCourses(minCourses);
+        } else {
+            students = studentService.getStudentsWithCourseStats();
+        }
+
+        return ResponseEntity.ok(students);
+    }
+
+    // GET /api/students/summary - Get student summaries
+    @GetMapping("/summary")
+    public ResponseEntity<List<StudentSummaryDTO>> getAllStudentSummaries() {
+        List<StudentSummaryDTO> summaries = studentService.getAllStudentSummaries();
+        return ResponseEntity.ok(summaries);
+    }
+
+    // GET /api/students/{id} - Get student by ID
     @GetMapping("/{id}")
     public ResponseEntity<Student> getStudentById(@PathVariable Long id) {
-        // Using Optional<> as mentor suggested - demonstrates power of derived queries
         Optional<Student> studentOpt = studentService.getStudentById(id);
         return studentOpt.map(ResponseEntity::ok)
                         .orElse(ResponseEntity.notFound().build());
     }
 
+    // POST /api/students - Create new student
     @PostMapping
     public ResponseEntity<?> createStudent(@Valid @RequestBody Student student) {
-        // Check if email already exists using derived query method
+        // Check if email already exists
         if (studentService.existsByEmail(student.getEmail())) {
             Map<String, String> error = new HashMap<>();
             error.put("error", "Email already exists");
@@ -59,14 +108,11 @@ public class StudentController {
         }
     }
 
+    // PUT /api/students/{id} - Update student
     @PutMapping("/{id}")
     public ResponseEntity<?> updateStudent(@PathVariable Long id, @Valid @RequestBody Student studentDetails) {
-        // Using Optional<> to check existence first
         Optional<Student> existingStudentOpt = studentService.getStudentById(id);
         if (existingStudentOpt.isEmpty()) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Student not found");
-            error.put("studentId", id.toString());
             return ResponseEntity.notFound().build();
         }
 
@@ -90,9 +136,9 @@ public class StudentController {
         }
     }
 
+    // DELETE /api/students/{id} - Delete student
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteStudent(@PathVariable Long id) {
-        // Using Optional<> to verify existence before deletion
         Optional<Student> studentOpt = studentService.getStudentById(id);
         if (studentOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -111,94 +157,87 @@ public class StudentController {
         }
     }
 
-    // DTO-based endpoints (subset of attributes as mentor suggested)
+    // GET /api/students/stats - Get student statistics
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getStudentStatistics() {
+        Map<String, Object> stats = new HashMap<>();
+        List<Student> allStudents = studentService.getAllStudents();
 
-    @GetMapping("/summary")
-    public ResponseEntity<List<StudentSummaryDTO>> getAllStudentSummaries() {
-        List<StudentSummaryDTO> summaries = studentService.getAllStudentSummaries();
-        return ResponseEntity.ok(summaries);
-    }
+        stats.put("totalStudents", allStudents.size());
+        stats.put("studentsWithCoursesCount", studentService.countStudentsWithCourses());
+        stats.put("studentsWithoutCoursesCount", studentService.getStudentsWithoutCourses().size());
+        stats.put("topStudentsByAge", studentService.getTopStudentsByAge());
 
-    @GetMapping("/with-courses")
-    public ResponseEntity<List<StudentWithCoursesDTO>> getStudentsWithCourseStats() {
-        List<StudentWithCoursesDTO> stats = studentService.getStudentsWithCourseStats();
+        // Calculate average age
+        double avgAge = allStudents.stream()
+                .mapToInt(Student::getAge)
+                .average()
+                .orElse(0.0);
+        stats.put("averageAge", Math.round(avgAge * 10.0) / 10.0);
+
         return ResponseEntity.ok(stats);
     }
 
-    // Advanced endpoints using derived query methods (power of JPQL as mentor mentioned)
-
-    @GetMapping("/search")
-    public ResponseEntity<List<Student>> searchStudents(@RequestParam String query) {
-        // Uses derived query method: findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase
-        List<Student> students = studentService.searchStudents(query);
-        return ResponseEntity.ok(students);
-    }
-
-    @GetMapping("/older-than/{age}")
-    public ResponseEntity<List<Student>> getStudentsOlderThan(@PathVariable Integer age) {
-        // Uses derived query method: findByAgeGreaterThan
-        List<Student> students = studentService.getStudentsOlderThan(age);
-        return ResponseEntity.ok(students);
-    }
-
-    @GetMapping("/age-range")
-    public ResponseEntity<List<Student>> getStudentsByAgeRange(
-            @RequestParam Integer minAge, @RequestParam Integer maxAge) {
-        // Uses derived query method: findByAgeBetween
-        List<Student> students = studentService.getStudentsByAgeRange(minAge, maxAge);
-        return ResponseEntity.ok(students);
-    }
-
-    @GetMapping("/without-courses")
-    public ResponseEntity<List<StudentWithCoursesDTO>> getStudentsWithoutCourses() {
-        // Uses DTO for subset of attributes with course statistics
-        List<StudentWithCoursesDTO> students = studentService.getStudentsWithoutCourses();
-        return ResponseEntity.ok(students);
-    }
-
-    @GetMapping("/minimum-courses/{count}")
-    public ResponseEntity<List<StudentWithCoursesDTO>> getStudentsWithMinimumCourses(@PathVariable Integer count) {
-        // Uses DTO for subset of attributes with course statistics
-        List<StudentWithCoursesDTO> students = studentService.getStudentsWithMinimumCourses(count);
-        return ResponseEntity.ok(students);
-    }
-
-    @GetMapping("/top-by-age")
-    public ResponseEntity<List<Student>> getTopStudentsByAge() {
-        // Uses derived query method: findTop5ByOrderByAgeDesc
-        List<Student> students = studentService.getTopStudentsByAge();
-        return ResponseEntity.ok(students);
-    }
-
-    // Utility endpoints
-
-    @GetMapping("/count-with-courses")
-    public ResponseEntity<Map<String, Long>> countStudentsWithCourses() {
-        Long count = studentService.countStudentsWithCourses();
-        Map<String, Long> response = new HashMap<>();
-        response.put("studentsWithCoursesCount", count);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/exists-email/{email}")
-    public ResponseEntity<Map<String, Boolean>> checkEmailExists(@PathVariable String email) {
-        // Uses derived query method: existsByEmail
-        boolean exists = studentService.existsByEmail(email);
-        Map<String, Boolean> response = new HashMap<>();
-        response.put("exists", exists);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/find-by-email/{email}")
-    public ResponseEntity<?> findStudentByEmail(@PathVariable String email) {
-        // Demonstrates Optional<> usage with derived query methods
-        Optional<Student> studentOpt = studentService.findByEmail(email);
-        if (studentOpt.isPresent()) {
-            return ResponseEntity.ok(studentOpt.get());
-        } else {
+    // POST /api/students/{studentId}/courses/{courseId} - Assign course to student
+    @PostMapping("/{studentId}/courses/{courseId}")
+    public ResponseEntity<?> assignCourseToStudent(@PathVariable Long studentId, @PathVariable Long courseId) {
+        try {
+            studentService.assignCourseToStudent(studentId, courseId);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Course assigned to student successfully");
+            response.put("studentId", studentId.toString());
+            response.put("courseId", courseId.toString());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();
-            error.put("error", "No student found with email: " + email);
-            return ResponseEntity.notFound().build();
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+
+    // DELETE /api/students/{studentId}/courses/{courseId} - Remove course from student
+    @DeleteMapping("/{studentId}/courses/{courseId}")
+    public ResponseEntity<?> removeCourseFromStudent(@PathVariable Long studentId, @PathVariable Long courseId) {
+        try {
+            studentService.removeCourseFromStudent(studentId, courseId);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Course removed from student successfully");
+            response.put("studentId", studentId.toString());
+            response.put("courseId", courseId.toString());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+
+    // GET /api/students/{studentId}/courses - Get all courses for a specific student
+    @GetMapping("/{studentId}/courses")
+    public ResponseEntity<?> getStudentCourses(@PathVariable Long studentId) {
+        try {
+            List<Course> courses = studentService.getCoursesForStudent(studentId);
+            return ResponseEntity.ok(courses);
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+
+    // GET /api/students/{studentId}/total-credits - Get total credits for a student
+    @GetMapping("/{studentId}/total-credits")
+    public ResponseEntity<?> getStudentTotalCredits(@PathVariable Long studentId) {
+        try {
+            int totalCredits = studentService.getTotalCreditsForStudent(studentId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("studentId", studentId);
+            response.put("totalCredits", totalCredits);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
     }
 }

@@ -139,4 +139,57 @@ public class StudentService {
     public Optional<Student> findByEmail(String email) {
         return studentRepository.findByEmail(email);
     }
+
+    // Student-Course relationship management methods
+    public void assignCourseToStudent(Long studentId, Long courseId) {
+        // Verify student exists
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with id: " + studentId));
+
+        // Verify course exists
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with id: " + courseId));
+
+        // Check if course is already assigned to another student
+        if (course.getStudentId() != null) {
+            throw new RuntimeException("Course is already assigned to another student");
+        }
+
+        // Assign course to student
+        course.setStudentId(studentId);
+        courseRepository.save(course);
+    }
+
+    public void removeCourseFromStudent(Long studentId, Long courseId) {
+        // Verify student exists
+        studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with id: " + studentId));
+
+        // Verify course exists and belongs to the student
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found with id: " + courseId));
+
+        if (!studentId.equals(course.getStudentId())) {
+            throw new RuntimeException("Course is not assigned to this student");
+        }
+
+        // Remove assignment
+        course.setStudentId(null);
+        courseRepository.save(course);
+    }
+
+    public List<Course> getCoursesForStudent(Long studentId) {
+        // Verify student exists
+        studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with id: " + studentId));
+
+        return courseRepository.findByStudentId(studentId);
+    }
+
+    public int getTotalCreditsForStudent(Long studentId) {
+        List<Course> courses = getCoursesForStudent(studentId);
+        return courses.stream()
+                .mapToInt(Course::getCredits)
+                .sum();
+    }
 }
